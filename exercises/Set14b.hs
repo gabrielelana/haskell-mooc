@@ -26,7 +26,11 @@ import Network.Wai.Handler.Warp (run)
 import Network.HTTP.Types (status200)
 
 -- Database
-import Database.SQLite.Simple (open,execute,execute_,query,query_,Connection,Query(..))
+import Database.SQLite.Simple (open,execute,execute_,query,query_,Only(..),Connection,Query(..),ToRow(..),FromRow(..),field)
+import Data.Foldable (fold, foldl')
+import Data.Functor (($>), (<&>))
+import qualified Text.Show as T
+import Examples.Bank (withdraw)
 
 ------------------------------------------------------------------------------
 -- Ex 1: Let's start with implementing some database operations. The
@@ -76,12 +80,15 @@ getAllQuery = Query (T.pack "SELECT account, amount FROM events;")
 -- NOTE! Do not add anything to the name, otherwise you'll get weird
 -- test failures later.
 openDatabase :: String -> IO Connection
-openDatabase = todo
+openDatabase name = do
+  conn <- open name
+  execute_ conn initQuery
+  return conn
 
 -- given a db connection, an account name, and an amount, deposit
 -- should add an (account, amount) row into the database
 deposit :: Connection -> T.Text -> Int -> IO ()
-deposit = todo
+deposit conn name amount = execute conn depositQuery (name, amount)
 
 ------------------------------------------------------------------------------
 -- Ex 2: Fetching an account's balance. Below you'll find
@@ -112,7 +119,30 @@ balanceQuery :: Query
 balanceQuery = Query (T.pack "SELECT amount FROM events WHERE account = ?;")
 
 balance :: Connection -> T.Text -> IO Int
-balance = todo
+balance conn name = do
+  rows <- query conn balanceQuery (Only name) :: IO [Only Int]
+  return $ sum $ map (\(Only x) -> x) rows
+
+-- [ALTERNATIVE IMPLEMENTATION] with a little more structure
+-- newtype DBBalance = DBBalance Int
+
+-- instance FromRow DBBalance where
+--   fromRow = DBBalance <$> field
+
+-- instance Semigroup DBBalance where
+--   (DBBalance bl) <> (DBBalance br) = DBBalance $ bl + br
+
+-- instance Monoid DBBalance where
+--   mempty = DBBalance 0
+
+-- fromBalance :: DBBalance -> Int
+-- fromBalance (DBBalance n) = n
+
+-- balance :: Connection -> T.Text -> IO Int
+-- balance conn name = do
+--   rows <- query conn balanceQuery (Only (name::T.Text)) :: IO [DBBalance]
+--   return $ fromBalance (fold rows)
+
 
 ------------------------------------------------------------------------------
 -- Ex 3: Now that we have the database part covered, let's think about
@@ -144,16 +174,24 @@ balance = todo
 --   parseCommand [T.pack "deposit", T.pack "madoff", T.pack "123456"]
 --     ==> Just (Deposit "madoff" 123456)
 
-data Command = Deposit T.Text Int | Balance T.Text
+data Command = Deposit T.Text Int | Withdraw T.Text Int | Balance T.Text
   deriving (Show, Eq)
 
 parseInt :: T.Text -> Maybe Int
 parseInt = readMaybe . T.unpack
 
-parseCommand :: [T.Text] -> Maybe Command
-parseCommand = todo
+parseText :: T.Text -> T.Text -> Maybe T.Text
+parseText expected given = if expected == given then Just expected else Nothing
 
-------------------------------------------------------------------------------
+parseCommand :: [T.Text] -> Maybe Command
+parseCommand [balance, name] = parseText (T.pack "balance") balance $> Balance name
+parseCommand [action, name, amount]
+  | action == T.pack "deposit" = Deposit name <$> parseInt amount
+  | action == T.pack "withdraw" = Withdraw name <$> parseInt amount
+  | otherwise = Nothing
+parseCommand _ = Nothing
+
+  ------------------------------------------------------------------------------
 -- Ex 4: Running commands. Implement the IO operation perform that takes a
 -- database Connection, the result of parseCommand (a Maybe Command),
 -- and runs the command in the database. Remember to use the
@@ -177,7 +215,10 @@ parseCommand = todo
 --   "0"
 
 perform :: Connection -> Maybe Command -> IO T.Text
-perform = todo
+perform conn (Just (Balance name)) = T.pack . show <$> balance conn name
+perform conn (Just (Deposit name amount)) = deposit conn name amount $> T.pack "OK"
+perform conn (Just (Withdraw name amount)) = deposit conn name (negate amount) $> T.pack "OK"
+perform conn Nothing = return $ T.pack "ERROR"
 
 ------------------------------------------------------------------------------
 -- Ex 5: Next up, let's set up a simple HTTP server. Implement a WAI
@@ -197,7 +238,10 @@ encodeResponse t = LB.fromStrict (encodeUtf8 t)
 -- Remember:
 -- type Application = Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 simpleServer :: Application
-simpleServer request respond = todo
+simpleServer request respond = respond $ responseLBS
+                               status200
+                               []
+                               (encodeResponse $ T.pack "BANK")
 
 ------------------------------------------------------------------------------
 -- Ex 6: Now we finally have all the pieces we need to actually
@@ -226,7 +270,13 @@ simpleServer request respond = todo
 -- Remember:
 -- type Application = Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 server :: Connection -> Application
-server db request respond = todo
+server conn request respond = do
+  responseBody <- encodeResponse <$> perform conn (parseCommand $ pathInfo request)
+  respond $ responseLBS status200 [] responseBody
+
+-- server :: Connection -> Application
+-- server conn request respond = responseBodyIO >>= \responseBody -> respond $ responseLBS status200 [] responseBody
+--   where responseBodyIO = encodeResponse <$> perform conn (parseCommand $ pathInfo request)
 
 port :: Int
 port = 3421
@@ -276,5 +326,3 @@ main = do
 --    - http://localhost:3421/deposit/pekka/1/3
 --    - http://localhost:3421/balance
 --    - http://localhost:3421/balance/matti/pekka
-
-

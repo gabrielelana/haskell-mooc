@@ -10,6 +10,7 @@ import Data.Char
 import Data.Text.Encoding
 import Data.Word
 import Data.Int
+import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.ByteString as B
@@ -28,7 +29,10 @@ import qualified Data.ByteString.Lazy as BL
 --  greetText (T.pack "Benedict Cumberbatch") ==> "Hello, Benedict Cumber...!"
 
 greetText :: T.Text -> T.Text
-greetText = todo
+greetText name = hello `T.append` shortenedAt 15 name `T.append` punctuation
+  where hello = T.pack "Hello, "
+        shortenedAt n s = if T.length s > n then T.take n s `T.append` T.pack "..." else s
+        punctuation = T.pack "!"
 
 ------------------------------------------------------------------------------
 -- Ex 2: Capitalize every second word of a Text.
@@ -40,7 +44,10 @@ greetText = todo
 --     ==> "WORD"
 
 shout :: T.Text -> T.Text
-shout = todo
+shout = T.unwords . zipWith go [0..] . T.words
+  where go :: Int -> T.Text -> T.Text
+        go n t | even n = T.toUpper t
+               | otherwise = t
 
 ------------------------------------------------------------------------------
 -- Ex 3: Find the longest sequence of a single character repeating in
@@ -51,7 +58,22 @@ shout = todo
 --   longestRepeat (T.pack "aabbbbccc") ==> 4
 
 longestRepeat :: T.Text -> Int
-longestRepeat = todo
+longestRepeat = maximumWithDefault 0 . map T.length . T.group
+  where maximumWithDefault :: Int -> [Int] -> Int
+        maximumWithDefault n [] = n
+        maximumWithDefault _ xs = maximum xs
+
+-- [ALTERNATIVE IMPLEMENTATION] before I found out about `T.group` :-/
+-- longestRepeat :: T.Text -> Int
+-- longestRepeat = end . T.foldl f ((0, Nothing), [])
+--   where f :: ((Int, Maybe Char), [Int]) -> Char -> ((Int, Maybe Char), [Int])
+--         f ((0, Nothing), res) c = ((1, Just c), res)
+--         f ((n, Just cn), res) cc | cc == cn = ((n + 1, Just cc), res)
+--                                  | otherwise = ((1, Just cc), n : res)
+
+--         end :: ((Int, Maybe Char), [Int]) -> Int
+--         end ((n, _), []) = n
+--         end ((n, Just m), res) = max n (maximum res)
 
 ------------------------------------------------------------------------------
 -- Ex 4: Given a lazy (potentially infinite) Text, extract the first n
@@ -64,7 +86,7 @@ longestRepeat = todo
 --   takeStrict 15 (TL.pack (cycle "asdf"))  ==>  "asdfasdfasdfasd"
 
 takeStrict :: Int64 -> TL.Text -> T.Text
-takeStrict = todo
+takeStrict n = TL.toStrict . TL.take n
 
 ------------------------------------------------------------------------------
 -- Ex 5: Find the difference between the largest and smallest byte
@@ -76,7 +98,8 @@ takeStrict = todo
 --   byteRange (B.pack [3]) ==> 0
 
 byteRange :: B.ByteString -> Word8
-byteRange = todo
+byteRange bs | B.null bs = 0
+             | otherwise = B.maximum bs - B.minimum bs
 
 ------------------------------------------------------------------------------
 -- Ex 6: Compute the XOR checksum of a ByteString. The XOR checksum of
@@ -97,7 +120,7 @@ byteRange = todo
 --   xorChecksum (B.pack []) ==> 0
 
 xorChecksum :: B.ByteString -> Word8
-xorChecksum = todo
+xorChecksum = B.foldl Data.Bits.xor 0
 
 ------------------------------------------------------------------------------
 -- Ex 7: Given a ByteString, compute how many UTF-8 characters it
@@ -114,7 +137,7 @@ xorChecksum = todo
 --   countUtf8Chars (B.drop 1 (encodeUtf8 (T.pack "åäö"))) ==> Nothing
 
 countUtf8Chars :: B.ByteString -> Maybe Int
-countUtf8Chars = todo
+countUtf8Chars = fmap T.length . either (const Nothing) Just . decodeUtf8'
 
 ------------------------------------------------------------------------------
 -- Ex 8: Given a (nonempty) strict ByteString b, generate an infinite
@@ -125,6 +148,7 @@ countUtf8Chars = todo
 --   BL.unpack (BL.take 20 (pingpong (B.pack [0,1,2])))
 --     ==> [0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1]
 
-pingpong :: B.ByteString -> BL.ByteString
-pingpong = todo
+-- unfoldr :: (a -> Maybe (Word8, a)) -> a -> ByteString
 
+pingpong :: B.ByteString -> BL.ByteString
+pingpong b = let bl = BL.fromStrict b in BL.cycle $ BL.append bl (BL.reverse bl)
