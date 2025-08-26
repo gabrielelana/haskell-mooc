@@ -10,6 +10,13 @@ University of Helsinki
 
 This work is licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).
 
+## About this repository
+
+This is my fork of the original repository. It contains all my solutions, which
+pass all the given tests. I'm sharing it so that future students can access a
+set of alternative solutions to compare with and learn from, in alignment with
+the spirit of a free learning course.
+
 ## About the course
 
 This is an online course on Functional Programming that uses the
@@ -61,5 +68,6 @@ Don't forget to run `stack build` again after changing branches.
 ## Reporting errors
 
 If you notice an error in these materials, you can report it via
+
 - an issue or pull request in this repository (see [CONTRIBUTING.md](CONTRIBUTING.md))
 - the course [channel on Telegram](https://t.me/haskell_mooc_fi)
